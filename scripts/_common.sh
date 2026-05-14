@@ -12,7 +12,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${UBUNTU_VERSION:=24.04}"
 : "${DESKTOP_PKGS:?'DESKTOP_PKGS must be set'}"
 
-UBUNTU_ISO="ubuntu-${UBUNTU_VERSION}-live-server-amd64.iso"
+# Resolve the latest point release (e.g. 24.04.4) so the URL is always valid.
+UBUNTU_ISO=$(curl -fsSL "https://releases.ubuntu.com/${UBUNTU_VERSION}/" \
+  | grep -oP "ubuntu-${UBUNTU_VERSION//./\\.}\\.\\d+-live-server-amd64\\.iso" \
+  | sort -V | tail -1)
 UBUNTU_ISO_URL="https://releases.ubuntu.com/${UBUNTU_VERSION}/${UBUNTU_ISO}"
 OUT_NAME="${FLAVOR}-${UBUNTU_VERSION}-t2-rootfs"
 BUILD_DIR="${REPO_ROOT}/build/${FLAVOR}"
