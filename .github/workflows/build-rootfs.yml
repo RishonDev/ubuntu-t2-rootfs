@@ -1,0 +1,50 @@
+name: Build T2 Ubuntu Rootfs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.flavor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: ubuntu
+            script: build-ubuntu.sh
+          - flavor: kubuntu
+            script: build-kubuntu.sh
+          - flavor: ubuntu-unity
+            script: build-unity.sh
+          - flavor: ubuntu-budgie
+            script: build-budgie.sh
+          - flavor: ubuntu-cinnamon
+            script: build-cinnamon.sh
+          - flavor: xubuntu
+            script: build-xubuntu.sh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h
+
+      - name: Enable KVM
+        run: sudo chmod 666 /dev/kvm
+
+      - name: Build rootfs
+        run: bash scripts/${{ matrix.script }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.flavor }}-rootfs
+          path: |
+            build/${{ matrix.flavor }}/${{ matrix.flavor }}-*-t2-rootfs.img.xz.part*
+            build/${{ matrix.flavor }}/${{ matrix.flavor }}-*-t2-rootfs.sha256
+          retention-days: 30

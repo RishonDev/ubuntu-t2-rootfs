@@ -1,0 +1,105 @@
+# Template — %%CODENAME%% and %%DESKTOP_PKGS%% are substituted by scripts/_common.sh.
+# For direct use: sed -e 's/%%CODENAME%%/noble/' -e 's/%%DESKTOP_PKGS%%/ubuntu-desktop-minimal/' autoinstall.yaml > user-data
+#cloud-config
+autoinstall:
+  version: 1
+
+  # Suppress all interactive prompts — required for headless installs
+  interactive-sections: []
+
+  locale: en_US.UTF-8
+
+  keyboard:
+    layout: us
+
+  network:
+    network:
+      version: 2
+      ethernets:
+        any:
+          dhcp4: true
+          match:
+            name: en*
+
+  storage:
+    layout:
+      name: direct  # EFI + root, no LVM; change to 'lvm' if preferred
+
+  identity:
+    hostname: t2-ubuntu
+    username: ubuntu
+    # Generate with: printf 'yourpassword' | openssl passwd -6 -stdin
+    password: "$6$CHANGEME"
+
+  ssh:
+    install-server: false
+
+  packages:
+    - curl
+    - gnupg
+
+  late-commands:
+    # -- T2 APT repository --
+    - |
+      curtin in-target --target=/target -- bash -c '
+        curl -fsSL https://adityagarg8.github.io/t2-ubuntu-repo/KEY.gpg |
+          gpg --dearmor > /etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg
+        curl -fsSL -o /etc/apt/sources.list.d/t2.list \
+          https://adityagarg8.github.io/t2-ubuntu-repo/t2.list
+        echo "deb [signed-by=/etc/apt/trusted.gpg.d/t2-ubuntu-repo.gpg] https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/%%CODENAME%% ./" \
+          >> /etc/apt/sources.list.d/t2.list
+        apt-get update -qq
+      '
+
+    # -- T2 kernel + hardware packages --
+    - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script
+
+    # -- Desktop environment --
+    - curtin in-target --target=/target -- apt-get install -y %%DESKTOP_PKGS%%
+
+    # -- apple-bce module (keyboard/touchpad/audio bridge) --
+    - echo 'apple-bce' > /target/etc/modules-load.d/t2.conf
+
+    # -- gzip initramfs (required for GRUB on T2) --
+    - sed -i 's/COMPRESS=lz4/COMPRESS=gzip/' /target/etc/initramfs-tools/initramfs.conf
+
+    # -- T2 kernel boot parameters --
+    - |
+      sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="[^"]*"/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash pm_async=off intel_iommu=on iommu=pt"/' \
+        /target/etc/default/grub
+
+    # -- AMD GPU power management (for MacBooks with AMD dGPU) --
+    - |
+      echo 'KERNEL=="card[012]", SUBSYSTEM=="drm", DRIVERS=="amdgpu", ATTR{device/power_dpm_force_performance_level}="low"' \
+        > /target/etc/udev/rules.d/30-amdgpu-pm.rules
+
+    # -- Suppress spurious WiFi popup for T2 USB NCM interface --
+    - |
+      echo 'SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="ac:de:48:00:11:22", NAME="t2_ncm"' \
+        > /target/etc/udev/rules.d/99-network-t2-ncm.rules
+    - mkdir -p /target/etc/NetworkManager/conf.d
+    - printf '[main]\nno-auto-default=t2_ncm\n' > /target/etc/NetworkManager/conf.d/99-network-t2-ncm.conf
+
+    # -- NetworkManager: disable random MAC for WiFi scanning --
+    - |
+      cat > /target/etc/NetworkManager/NetworkManager.conf <<'EOF'
+      [main]
+      plugins=ifupdown,keyfile
+      [ifupdown]
+      managed=false
+      [device]
+      wifi.scan-rand-mac-address=no
+      EOF
+
+    # -- Apple firmware fetch service (extracts WiFi/BT firmware from macOS on first boot) --
+    - |
+      curl -fsSL https://raw.githubusercontent.com/t2linux/wiki/refs/heads/master/docs/tools/get-apple-firmware.service \
+        -o /target/etc/systemd/system/get-apple-firmware.service
+    - curtin in-target --target=/target -- systemctl enable get-apple-firmware.service
+
+    # -- Rebuild initramfs and GRUB with T2 kernel --
+    - curtin in-target --target=/target -- update-initramfs -u
+    - curtin in-target --target=/target -- update-grub
+
+  # Reboot automatically when done — no manual intervention needed
+  shutdown: reboot
