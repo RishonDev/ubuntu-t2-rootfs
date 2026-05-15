@@ -13,10 +13,14 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${DESKTOP_PKGS:?'DESKTOP_PKGS must be set'}"
 : "${DISK_SIZE:=20G}"
 
-# Resolve the latest point release (e.g. 24.04.4) so the URL is always valid.
+# Resolve the ISO filename — handles both initial release (26.04) and point
+# releases (26.04.1, 26.04.2, …). The || true prevents pipefail from aborting
+# when grep finds no match; we catch that case explicitly below.
 UBUNTU_ISO=$(curl -fsSL "https://releases.ubuntu.com/${UBUNTU_VERSION}/" \
-  | grep -oP "ubuntu-${UBUNTU_VERSION//./\\.}\\.\\d+-live-server-amd64\\.iso" \
-  | sort -V | tail -1)
+  | grep -oP "ubuntu-${UBUNTU_VERSION//./\\.}(?:\\.\\d+)?-live-server-amd64\\.iso" \
+  | sort -V | tail -1 || true)
+[[ -n "$UBUNTU_ISO" ]] \
+  || { echo "ERROR: could not find Ubuntu ${UBUNTU_VERSION} ISO at releases.ubuntu.com" >&2; exit 1; }
 UBUNTU_ISO_URL="https://releases.ubuntu.com/${UBUNTU_VERSION}/${UBUNTU_ISO}"
 OUT_NAME="${FLAVOR}-${UBUNTU_VERSION}-t2-rootfs"
 BUILD_DIR="${REPO_ROOT}/build/${FLAVOR}"
