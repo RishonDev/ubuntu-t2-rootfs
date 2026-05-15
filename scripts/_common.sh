@@ -28,7 +28,7 @@ build_rootfs() {
   sudo apt-get install -y -q qemu-system-x86 qemu-utils xorriso
 
   echo "==> [${FLAVOR}] Fetching Ubuntu Server ${UBUNTU_VERSION}..."
-  [[ -f "${UBUNTU_ISO}" ]] || wget -q --show-progress -O "${UBUNTU_ISO}" "${UBUNTU_ISO_URL}"
+  [[ -f "${UBUNTU_ISO}" ]] || wget -q -O "${UBUNTU_ISO}" "${UBUNTU_ISO_URL}"
 
   # Direct kernel boot bypasses the GRUB menu entirely, no keystrokes needed.
   echo "==> [${FLAVOR}] Extracting boot files from ISO..."

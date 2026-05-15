@@ -37,6 +37,13 @@ autoinstall:
     - gnupg
 
   late-commands:
+    # -- Enable universe + multiverse (required for desktop flavors) --
+    - |
+      curtin in-target --target=/target -- bash -c '
+        sed -i "s/Components: main restricted/Components: main restricted universe multiverse/" /etc/apt/sources.list.d/ubuntu.sources
+        apt-get update -qq
+      '
+
     # -- T2 APT repository --
     - |
       curtin in-target --target=/target -- bash -c '
@@ -57,6 +64,30 @@ autoinstall:
 
     # -- apple-bce module (keyboard/touchpad/audio bridge) --
     - echo 'apple-bce' > /target/etc/modules-load.d/t2.conf
+
+    # -- wpa_supplicant 2.11 regression: broadcom WiFi broken without this --
+    - echo 'options brcmfmac feature_disable=0x82000' > /target/etc/modprobe.d/brcmfmac.conf
+
+    # -- Broadcom WiFi + Bluetooth firmware for all T2 models --
+    - |
+      curtin in-target --target=/target -- bash -c '
+        apt-get install -y -q git python3
+        tmp=$(mktemp -d)
+        cd "$tmp"
+        git clone --depth=1 https://github.com/NoaHimesaka1873/asahi-installer
+        cd asahi-installer
+        mkdir wifi bluetooth
+        curl -fsSL https://mirror.funami.tech/arch-mact2/firmware/wifi.tar.gz | tar xz --directory wifi/
+        curl -fsSL https://mirror.funami.tech/arch-mact2/firmware/bluetooth.tar.gz | tar xz --directory bluetooth/
+        mkdir ../firmware-wifi ../firmware-bluetooth
+        python3 -m asahi_firmware.wifi wifi ../firmware-wifi
+        python3 -m asahi_firmware.bluetooth bluetooth ../firmware-bluetooth
+        mkdir -p /lib/firmware
+        tar xf ../firmware-wifi/firmware.tar -C /lib/firmware/
+        tar xf ../firmware-bluetooth/firmware.tar -C /lib/firmware/
+        cd /
+        rm -rf "$tmp"
+      '
 
     # -- gzip initramfs (required for GRUB on T2) --
     - sed -i 's/COMPRESS=lz4/COMPRESS=gzip/' /target/etc/initramfs-tools/initramfs.conf
