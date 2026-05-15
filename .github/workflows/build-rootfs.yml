@@ -9,10 +9,42 @@ on:
         default: ''
 
 jobs:
+  create-release:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set release tag
+        id: tag
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          gh release view "$TAG" &>/dev/null && \
+            echo "Release $TAG already exists — will upload to it" || \
+            gh release create "$TAG" \
+              --title "T2 Ubuntu Rootfs ${TAG}" \
+              --notes "Automated build from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
   build:
     name: ${{ matrix.flavor }}
+    needs: create-release
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: write
 
     strategy:
       fail-fast: false
@@ -45,19 +77,17 @@ jobs:
       - name: Build rootfs
         run: bash scripts/${{ matrix.script }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.flavor }}-rootfs
-          path: |
-            build/${{ matrix.flavor }}/${{ matrix.flavor }}-*-t2-rootfs.img.xz.part*
-            build/${{ matrix.flavor }}/${{ matrix.flavor }}-*-t2-rootfs.sha256
-            build/${{ matrix.flavor }}/${{ matrix.flavor }}-*-t2-rootfs.img.xz.sha256
-          retention-days: 30
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          find build/${{ matrix.flavor }}/ -type f | sort | \
+            xargs gh release upload "$TAG" --clobber
 
-  release:
-    name: Create release
-    needs: build
+  update-metadata:
+    name: Update metadata.json
+    needs: [create-release, build]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -66,68 +96,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
-
-      - name: Set release tag
-        id: tag
-        run: |
-          TAG="${{ github.event.inputs.release_tag }}"
-          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub release
+      - name: Download sha256 files from release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
-          gh release view "$TAG" &>/dev/null && \
-            echo "Release $TAG already exists — uploading to it" || \
-            gh release create "$TAG" \
-              --title "T2 Ubuntu Rootfs ${TAG}" \
-              --notes "Automated build from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
-      - name: Upload release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          find artifacts/ -type f | sort | \
-            xargs gh release upload "$TAG" --clobber
+          mkdir -p artifacts
+          gh release download "$TAG" --pattern "*.sha256" --dir artifacts/ || true
 
       - name: Generate metadata.json
         env:
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           python3 << 'EOF'
-          import json, os, glob
+          import json, os
 
           REPO  = os.environ["GITHUB_REPOSITORY"]
           TAG   = os.environ["TAG"]
           BASE  = f"https://github.com/{REPO}/releases/download/{TAG}"
 
           NAMES = {
-              "ubuntu":           "Ubuntu 26.04 - Resolute Raccoon",
-              "kubuntu":          "Kubuntu 26.04 - Resolute Raccoon",
-              "ubuntu-unity":     "Ubuntu Unity 26.04 - Resolute Raccoon",
-              "ubuntu-budgie":    "Ubuntu Budgie 26.04 - Resolute Raccoon",
-              "ubuntu-cinnamon":  "Ubuntu Cinnamon 26.04 - Resolute Raccoon",
-              "xubuntu":          "Xubuntu 26.04 - Resolute Raccoon",
+              "ubuntu":          "Ubuntu 26.04 - Resolute Raccoon",
+              "kubuntu":         "Kubuntu 26.04 - Resolute Raccoon",
+              "ubuntu-unity":    "Ubuntu Unity 26.04 - Resolute Raccoon",
+              "ubuntu-budgie":   "Ubuntu Budgie 26.04 - Resolute Raccoon",
+              "ubuntu-cinnamon": "Ubuntu Cinnamon 26.04 - Resolute Raccoon",
+              "xubuntu":         "Xubuntu 26.04 - Resolute Raccoon",
           }
 
           entries = []
           for flavor, name in NAMES.items():
-              parts = sorted(glob.glob(
-                  f"artifacts/{flavor}-rootfs/{flavor}-26.04-t2-rootfs.img.xz.part*"
-              ))
-              if not parts:
+              parts_sha = f"artifacts/{flavor}-26.04-t2-rootfs.sha256"
+              xz_sha    = f"artifacts/{flavor}-26.04-t2-rootfs.img.xz.sha256"
+              if not os.path.exists(parts_sha):
                   continue
-              sha_file = f"artifacts/{flavor}-rootfs/{flavor}-26.04-t2-rootfs.img.xz.sha256"
-              entry = {"name": name, "iso": [f"{BASE}/{os.path.basename(p)}" for p in parts]}
-              if os.path.exists(sha_file):
-                  entry["sha256"] = open(sha_file).read().strip()
+              parts = [
+                  f"{BASE}/{line.split()[-1]}"
+                  for line in open(parts_sha)
+                  if line.strip()
+              ]
+              entry = {"name": name, "iso": parts}
+              if os.path.exists(xz_sha):
+                  entry["sha256"] = open(xz_sha).read().strip()
               entries.append(entry)
 
           with open("metadata.json", "w") as f:
@@ -139,5 +149,5 @@ jobs:
       - name: Upload metadata.json
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
+          TAG: ${{ needs.create-release.outputs.tag }}
         run: gh release upload "$TAG" metadata.json --clobber
