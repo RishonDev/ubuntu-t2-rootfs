@@ -68,11 +68,10 @@ autoinstall:
       '
 
     # -- Desktop environment (installed before linux-t2 intentionally) --
-    # Desktop metapackages pull in linux-restricted-modules-$(uname -r).
-    # If linux-t2 is already present, that kernel version has no matching
-    # restricted-modules package and apt fails with exit 100. Installing
-    # the desktop first (while linux-generic is still active) resolves this.
-    - curtin in-target --target=/target -- apt-get install -y %%DESKTOP_PKGS%%
+    # --no-install-recommends skips kubuntu/ubuntu-restricted-extras and
+    # the linux-restricted-modules dependency chain, which can be missing
+    # or broken in a fresh 26.04 repo and causes exit 100.
+    - curtin in-target --target=/target -- apt-get install -y --no-install-recommends %%DESKTOP_PKGS%%
 
     # -- T2 kernel + hardware packages --
     - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script
