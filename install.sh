@@ -10,7 +10,12 @@ FLAVORS=(ubuntu kubuntu ubuntu-unity ubuntu-budgie ubuntu-cinnamon xubuntu)
 
 # ── Colors ────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
-  R='\033[0;31m' G='\033[0;32m' Y='\033[1;33m' C='\033[0;36m' W='\033[1m' N='\033[0m'
+  R='\033[0;31m'  # red
+  G='\033[0;32m'  # green
+  Y='\033[1;33m'  # yellow
+  C='\033[0;36m'  # cyan
+  W='\033[1m'     # bold
+  N='\033[0m'     # reset
 else
   R='' G='' Y='' C='' W='' N=''
 fi
@@ -56,31 +61,66 @@ done
 [[ "$(uname)" == Darwin ]] || die "This script is for macOS only"
 [[ $EUID -eq 0 ]] || die "Run as root: sudo bash install.sh"
 for cmd in diskutil hdiutil curl python3 xz dd; do
-  command -v "$cmd" &>/dev/null || die "Missing: $cmd"
+  command -v "$cmd" &>/dev/null || die "Missing required tool: $cmd"
 done
-command -v xz &>/dev/null || die "Missing: xz — install with: brew install xz"
 command -v pv &>/dev/null && PV=true
 
-# ── Helpers ───────────────────────────────────────────────────────────────
-disk_info()     { diskutil info "$1" 2>/dev/null; }
-disk_size_bytes() { disk_info "$1" | grep "Disk Size" | grep -oE '\([0-9]+ Bytes\)' | grep -oE '[0-9]+'; }
-disk_size_human() { disk_info "$1" | awk -F': ' '/Disk Size:/{gsub(/^ +/,"",$2); split($2,a,"("); gsub(/ +$/,"",a[1]); print a[1]}'; }
-disk_model()    { disk_info "$1" | awk -F': ' '/Device \/ Media Name:/{gsub(/^ +/,"",$2); print $2}'; }
-disk_location() { disk_info "$1" | awk -F': ' '/Device Location:/{gsub(/^ +/,"",$2); print $2}'; }
+# ── Disk helpers ───────────────────────────────────────────────────────────
+disk_info() {
+  diskutil info "$1" 2>/dev/null
+}
 
+disk_size_bytes() {
+  disk_info "$1" \
+    | grep "Disk Size" \
+    | grep -oE '\([0-9]+ Bytes\)' \
+    | grep -oE '[0-9]+'
+}
+
+disk_size_human() {
+  disk_info "$1" | awk -F': ' '
+    /Disk Size:/ {
+      gsub(/^ +/, "", $2)
+      split($2, fields, "(")
+      gsub(/ +$/, "", fields[1])
+      print fields[1]
+    }
+  '
+}
+
+disk_model() {
+  disk_info "$1" | awk -F': ' '
+    /Device \/ Media Name:/ { gsub(/^ +/, "", $2); print $2 }
+  '
+}
+
+disk_location() {
+  disk_info "$1" | awk -F': ' '
+    /Device Location:/ { gsub(/^ +/, "", $2); print $2 }
+  '
+}
+
+# Converts a human size string (e.g. "50G", "1.5TB") to bytes.
 parse_size() {
   python3 -c "
 import re, sys
 s = '${1}'.strip().upper()
 m = re.match(r'^([0-9.]+)\s*(T|TB|G|GB|M|MB)?$', s)
-if not m: sys.exit(1)
-n, u = float(m.group(1)), (m.group(2) or 'B')
-mult = {'M':1000**2,'MB':1000**2,'G':1000**3,'GB':1000**3,'T':1000**4,'TB':1000**4}
-print(int(n * mult.get(u, 1)))
+if not m:
+    sys.exit(1)
+n, unit = float(m.group(1)), (m.group(2) or 'B')
+multipliers = {
+    'M': 1000**2, 'MB': 1000**2,
+    'G': 1000**3, 'GB': 1000**3,
+    'T': 1000**4, 'TB': 1000**4,
+}
+print(int(n * multipliers.get(unit, 1)))
 " 2>/dev/null || die "Invalid size: ${1} — use e.g. 50G, 80GB"
 }
 
-gb() { python3 -c "print(f'{int(${1}) // 1000**3} GB')"; }
+gb() {
+  python3 -c "print(f'{int(${1}) // 1000**3} GB')"
+}
 
 # ── Banner ────────────────────────────────────────────────────────────────
 echo -e "${W}"
@@ -99,7 +139,9 @@ read -rp "  Press Enter to continue (Ctrl+C to cancel)..."
 # ── Disk selection ────────────────────────────────────────────────────────
 info "Available disks"
 
-mapfile -t DISK_LIST < <(diskutil list | awk '/^\/dev\/disk[0-9]+[[:space:]]/{print $1}')
+mapfile -t DISK_LIST < <(
+  diskutil list | awk '/^\/dev\/disk[0-9]+[[:space:]]/ { print $1 }'
+)
 [[ ${#DISK_LIST[@]} -gt 0 ]] || die "No disks found"
 
 printf "\n  %-5s %-12s %-12s %-12s %s\n" "#" "DEVICE" "SIZE" "TYPE" "NAME"
@@ -158,7 +200,9 @@ WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 EXPECTED_SHA=""
-mapfile -t PARTS < <(find . -maxdepth 3 -name "${FLAVOR}-${UBUNTU_VERSION}-t2-rootfs.img.xz.part*" | sort -V)
+mapfile -t PARTS < <(
+  find . -maxdepth 3 -name "${FLAVOR}-${UBUNTU_VERSION}-t2-rootfs.img.xz.part*" | sort -V
+)
 
 if [[ ${#PARTS[@]} -gt 0 ]]; then
   ok "Found ${#PARTS[@]} local part(s)"
@@ -175,13 +219,13 @@ else
   mapfile -t META_LINES < <(
     curl -fsSL "$META_URL" | python3 -c "
 import json, sys
-data = json.load(sys.stdin)
-flavor = '${FLAVOR}'.replace('-', ' ')
+data    = json.load(sys.stdin)
+flavor  = '${FLAVOR}'.replace('-', ' ')
 version = '${UBUNTU_VERSION}'
-for e in data.get('all', []):
-    if e['name'].lower().startswith(flavor + ' ' + version):
-        print(e.get('sha256', ''))
-        for url in e.get('iso', []):
+for entry in data.get('all', []):
+    if entry['name'].lower().startswith(flavor + ' ' + version):
+        print(entry.get('sha256', ''))
+        for url in entry.get('iso', []):
             print(url)
         break
 "
@@ -215,14 +259,14 @@ fi
 
 # ── Write ──────────────────────────────────────────────────────────────────
 if [[ "${DISK_LOC_MAP[$TARGET_DISK]}" == Internal ]]; then
-  # ── Internal: Asahi-style resize (or overwrite existing install) ──────────
+  # ── Internal disk: dual-boot (Asahi-style APFS resize) ────────────────────
   info "Internal disk selected — dual-boot setup"
 
-  EFI_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_EFI/{print $NF; exit}')
-  ROOT_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_Root/{print $NF; exit}')
+  EFI_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_EFI/  { print $NF; exit }')
+  ROOT_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_Root/ { print $NF; exit }')
 
   if [[ -n "$EFI_ID" && -n "$ROOT_ID" ]]; then
-    # ── Existing install detected ──────────────────────────────────────────
+    # ── Overwrite existing Linux install ──────────────────────────────────
     echo ""
     diskutil list "$TARGET_DISK"
     echo ""
@@ -233,9 +277,9 @@ if [[ "${DISK_LOC_MAP[$TARGET_DISK]}" == Internal ]]; then
     [[ "$confirm" == yes ]] || die "Aborted"
 
   else
-    # ── Fresh install: resize APFS and create partitions ──────────────────
+    # ── Fresh install: shrink macOS and carve out Linux partitions ─────────
     APFS_ID=$(diskutil list "$TARGET_DISK" \
-      | awk '/Apple_APFS[[:space:]]/{print $NF; exit}')
+      | awk '/Apple_APFS[[:space:]]/ { print $NF; exit }')
     [[ -n "$APFS_ID" ]] || die "Could not find macOS APFS container on ${TARGET_DISK}"
 
     APFS_BYTES=$(disk_size_bytes "/dev/${APFS_ID}")
@@ -269,43 +313,43 @@ if [[ "${DISK_LOC_MAP[$TARGET_DISK]}" == Internal ]]; then
     step "Creating Linux EFI partition (512 MB)..."
     run diskutil addPartition "/dev/${APFS_ID}" "MS-DOS FAT32" "Linux_EFI" 512M
 
-    EFI_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_EFI/{print $NF; exit}')
+    EFI_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_EFI/ { print $NF; exit }')
     [[ -n "$EFI_ID" ]] || die "Failed to locate new EFI partition"
 
     step "Creating Linux root partition (remaining space)..."
     run diskutil addPartition "/dev/${EFI_ID}" "MS-DOS FAT32" "Linux_Root" 0b
 
-    ROOT_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_Root/{print $NF; exit}')
+    ROOT_ID=$(diskutil list "$TARGET_DISK" | awk '/Linux_Root/ { print $NF; exit }')
     [[ -n "$ROOT_ID" ]] || die "Failed to locate new root partition"
   fi
 
-  # macOS may have auto-mounted the FAT32 partitions — unmount before writing
+  # macOS may auto-mount FAT32 partitions — unmount before writing
   run diskutil unmount "/dev/${EFI_ID}"  2>/dev/null || true
   run diskutil unmount "/dev/${ROOT_ID}" 2>/dev/null || true
 
-  # Estimate image size from parts for the free-space warning
-  IMG_BYTES=$(du -sk "${PARTS[@]}" | awk '{s+=$1} END{print s*1024}')
-  FREE_MACOS=$(df -k / | awk 'NR==2{print $4 * 1024}')
+  # Warn if the reassembled image won't fit in the temp directory
+  IMG_BYTES=$(du -sk "${PARTS[@]}" | awk '{ s += $1 } END { print s * 1024 }')
+  FREE_MACOS=$(df -k / | awk 'NR==2 { print $4 * 1024 }')
   (( FREE_MACOS > IMG_BYTES )) \
     || warn "Low free space on macOS — the reassembled image may not fit in ${WORK_DIR}"
 
   step "Reassembling image..."
   IMAGE_FILE="${WORK_DIR}/disk.img"
-  PARTS_Q=$(printf '%q ' "${PARTS[@]}")
+  PARTS_Q=$(printf '%q ' "${PARTS[@]}")   # shell-quote paths in case they contain spaces
   run_sh "cat ${PARTS_Q}| xz -d > $(printf '%q' "$IMAGE_FILE")"
 
   step "Attaching disk image..."
   if ! $DRY_RUN; then
     IMG_DISK=$(hdiutil attach -nomount \
       -imagekey diskimage-class=CRawDiskImage "$IMAGE_FILE" \
-      | awk 'NR==1{print $1}')
+      | awk 'NR==1 { print $1 }')
     [[ -n "$IMG_DISK" ]] || die "hdiutil attach failed"
     trap 'hdiutil detach "$IMG_DISK" 2>/dev/null; rm -rf "$WORK_DIR"' EXIT
 
-    EFI_SRC=$(diskutil list "$IMG_DISK" | awk '/EFI/{print $NF; exit}')
-    ROOT_SRC=$(diskutil list "$IMG_DISK" | awk '/Linux/{print $NF; exit}')
+    EFI_SRC=$(diskutil list "$IMG_DISK" | awk '/EFI/   { print $NF; exit }')
+    ROOT_SRC=$(diskutil list "$IMG_DISK" | awk '/Linux/ { print $NF; exit }')
     [[ -n "$EFI_SRC" && -n "$ROOT_SRC" ]] \
-      || die "Could not identify EFI+root in disk image"
+      || die "Could not identify EFI+root partitions in disk image"
 
     step "Writing EFI  : /dev/${EFI_SRC}  →  /dev/r${EFI_ID}"
     dd if="/dev/r${EFI_SRC}" of="/dev/r${EFI_ID}" bs=4m
@@ -324,7 +368,7 @@ if [[ "${DISK_LOC_MAP[$TARGET_DISK]}" == Internal ]]; then
   run sync
 
 else
-  # ── External: wipe and write ──────────────────────────────────────────────
+  # ── External disk: wipe and write ─────────────────────────────────────────
   info "Writing image to ${TARGET_DISK}"
 
   if diskutil list "$TARGET_DISK" | grep -qi "linux"; then
@@ -336,6 +380,7 @@ else
   ask "Type 'yes' to confirm" confirm
   [[ "$confirm" == yes ]] || die "Aborted"
 
+  # /dev/disk2 → /dev/rdisk2  (raw device bypasses buffer cache, ~3× faster writes)
   RAW_DISK="${TARGET_DISK/\/dev\/disk//dev/rdisk}"
   PARTS_Q=$(printf '%q ' "${PARTS[@]}")
 
