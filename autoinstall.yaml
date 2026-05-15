@@ -1,6 +1,5 @@
-# Template — %%CODENAME%% and %%DESKTOP_PKGS%% are substituted by scripts/_common.sh.
-# For direct use: sed -e 's/%%CODENAME%%/noble/' -e 's/%%DESKTOP_PKGS%%/ubuntu-desktop-minimal/' autoinstall.yaml > user-data
 #cloud-config
+# Template: %%CODENAME%% and %%DESKTOP_PKGS%% are substituted by scripts/_common.sh.
 autoinstall:
   version: 1
 
@@ -13,13 +12,12 @@ autoinstall:
     layout: us
 
   network:
-    network:
-      version: 2
-      ethernets:
-        any:
-          dhcp4: true
-          match:
-            name: en*
+    version: 2
+    ethernets:
+      any:
+        dhcp4: true
+        match:
+          name: en*
 
   storage:
     layout:

@@ -42,7 +42,7 @@ build_rootfs() {
     -e "s|%%CODENAME%%|${CODENAME}|g" \
     -e "s|%%DESKTOP_PKGS%%|${DESKTOP_PKGS}|g" \
     "${REPO_ROOT}/autoinstall.yaml" > "${tmpdir}/user-data"
-  touch "${tmpdir}/meta-data"
+  printf 'instance-id: ubuntu-t2-build\nlocal-hostname: t2-ubuntu\n' > "${tmpdir}/meta-data"
   xorriso -as mkisofs -volid CIDATA -joliet -rock \
     -output seed.iso "${tmpdir}" 2>/dev/null
   rm -rf "${tmpdir}"
