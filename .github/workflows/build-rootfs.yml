@@ -58,6 +58,7 @@ jobs:
   release:
     name: Create release
     needs: build
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: write

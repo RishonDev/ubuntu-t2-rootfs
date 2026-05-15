@@ -38,9 +38,12 @@ autoinstall:
 
   late-commands:
     # -- Enable universe + multiverse (required for desktop flavors) --
+    # Replace the entire Components: line rather than matching exact text,
+    # so this works regardless of what the installer put there by default.
     - |
       curtin in-target --target=/target -- bash -c '
-        sed -i "s/Components: main restricted/Components: main restricted universe multiverse/" /etc/apt/sources.list.d/ubuntu.sources
+        sed -i "s/^Components:.*/Components: main restricted universe multiverse/" \
+          /etc/apt/sources.list.d/ubuntu.sources
         apt-get update -qq
       '
 
