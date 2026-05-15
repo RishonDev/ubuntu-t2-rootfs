@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${CODENAME:=noble}"
 : "${UBUNTU_VERSION:=24.04}"
 : "${DESKTOP_PKGS:?'DESKTOP_PKGS must be set'}"
+: "${DISK_SIZE:=20G}"
 
 # Resolve the latest point release (e.g. 24.04.4) so the URL is always valid.
 UBUNTU_ISO=$(curl -fsSL "https://releases.ubuntu.com/${UBUNTU_VERSION}/" \
@@ -47,8 +48,8 @@ build_rootfs() {
     -output seed.iso "${tmpdir}" 2>/dev/null
   rm -rf "${tmpdir}"
 
-  echo "==> [${FLAVOR}] Creating 8G disk image..."
-  qemu-img create -f qcow2 disk.qcow2 8G
+  echo "==> [${FLAVOR}] Creating ${DISK_SIZE} disk image..."
+  qemu-img create -f qcow2 disk.qcow2 "${DISK_SIZE}"
 
   sudo chmod 666 /dev/kvm 2>/dev/null || true
 
@@ -76,6 +77,7 @@ build_rootfs() {
 
   echo "==> [${FLAVOR}] Compressing (xz -T0)..."
   xz -T0 disk.img  # removes disk.img, writes disk.img.xz
+  sha256sum disk.img.xz | awk '{print $1}' > "${OUT_NAME}.img.xz.sha256"
 
   echo "==> [${FLAVOR}] Splitting into ≤2G parts..."
   split \

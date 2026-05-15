@@ -60,6 +60,7 @@ autoinstall:
     - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script
 
     # -- Desktop environment --
+    - curtin in-target --target=/target -- apt-get clean
     - curtin in-target --target=/target -- apt-get install -y %%DESKTOP_PKGS%%
 
     # -- apple-bce module (keyboard/touchpad/audio bridge) --
