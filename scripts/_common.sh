@@ -60,7 +60,7 @@ build_rootfs() {
   echo "==> [${FLAVOR}] Running installer (expect 30-90 min)..."
   timeout 7200 qemu-system-x86_64 \
     -enable-kvm \
-    -m 4096 \
+    -m 6144 \
     -smp "$(nproc)" \
     -cpu host \
     -no-reboot \

@@ -59,12 +59,12 @@ autoinstall:
         apt-get update -qq
       '
 
-    # -- T2 kernel + hardware packages --
-    - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script
-
-    # -- Desktop environment --
+    # -- T2 kernel + hardware + desktop in one pass --
+    # Installing together lets apt resolve all dependencies at once, avoiding
+    # conflicts that arise when linux-t2 is already present and apt then tries
+    # to satisfy linux-generic pulls from a desktop metapackage.
+    - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script %%DESKTOP_PKGS%%
     - curtin in-target --target=/target -- apt-get clean
-    - curtin in-target --target=/target -- apt-get install -y %%DESKTOP_PKGS%%
 
     # -- apple-bce module (keyboard/touchpad/audio bridge) --
     - echo 'apple-bce' > /target/etc/modules-load.d/t2.conf
