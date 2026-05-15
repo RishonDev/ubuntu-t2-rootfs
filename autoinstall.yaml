@@ -59,11 +59,15 @@ autoinstall:
         apt-get update -qq
       '
 
-    # -- T2 kernel + hardware + desktop in one pass --
-    # Installing together lets apt resolve all dependencies at once, avoiding
-    # conflicts that arise when linux-t2 is already present and apt then tries
-    # to satisfy linux-generic pulls from a desktop metapackage.
-    - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script %%DESKTOP_PKGS%%
+    # -- Desktop environment (installed before linux-t2 intentionally) --
+    # Desktop metapackages pull in linux-restricted-modules-$(uname -r).
+    # If linux-t2 is already present, that kernel version has no matching
+    # restricted-modules package and apt fails with exit 100. Installing
+    # the desktop first (while linux-generic is still active) resolves this.
+    - curtin in-target --target=/target -- apt-get install -y %%DESKTOP_PKGS%%
+
+    # -- T2 kernel + hardware packages --
+    - curtin in-target --target=/target -- apt-get install -y linux-t2 apple-t2-audio-config apple-firmware-script
     - curtin in-target --target=/target -- apt-get clean
 
     # -- apple-bce module (keyboard/touchpad/audio bridge) --
