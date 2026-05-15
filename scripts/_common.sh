@@ -8,8 +8,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 : "${FLAVOR:?'FLAVOR must be set'}"
-: "${CODENAME:=noble}"
-: "${UBUNTU_VERSION:=24.04}"
+: "${CODENAME:=resolute}"
+: "${UBUNTU_VERSION:=26.04}"
 : "${DESKTOP_PKGS:?'DESKTOP_PKGS must be set'}"
 : "${DISK_SIZE:=20G}"
 

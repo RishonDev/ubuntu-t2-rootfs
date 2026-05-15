@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 FLAVOR="kubuntu"
-CODENAME="noble"
-UBUNTU_VERSION="24.04"
+CODENAME="resolute"
+UBUNTU_VERSION="26.04"
 DESKTOP_PKGS="kubuntu-desktop"
 DISK_SIZE="20G"
 

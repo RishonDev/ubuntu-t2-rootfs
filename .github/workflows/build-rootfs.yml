@@ -74,7 +74,7 @@ jobs:
         id: tag
         run: |
           TAG="${{ github.event.inputs.release_tag }}"
-          [ -z "$TAG" ] && TAG="v24.04-$(date +%Y.%m.%d)"
+          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
@@ -108,22 +108,22 @@ jobs:
           BASE  = f"https://github.com/{REPO}/releases/download/{TAG}"
 
           NAMES = {
-              "ubuntu":           "Ubuntu 24.04 - Noble Numbat",
-              "kubuntu":          "Kubuntu 24.04 - Noble Numbat",
-              "ubuntu-unity":     "Ubuntu Unity 24.04 - Noble Numbat",
-              "ubuntu-budgie":    "Ubuntu Budgie 24.04 - Noble Numbat",
-              "ubuntu-cinnamon":  "Ubuntu Cinnamon 24.04 - Noble Numbat",
-              "xubuntu":          "Xubuntu 24.04 - Noble Numbat",
+              "ubuntu":           "Ubuntu 26.04 - Resolute Raccoon",
+              "kubuntu":          "Kubuntu 26.04 - Resolute Raccoon",
+              "ubuntu-unity":     "Ubuntu Unity 26.04 - Resolute Raccoon",
+              "ubuntu-budgie":    "Ubuntu Budgie 26.04 - Resolute Raccoon",
+              "ubuntu-cinnamon":  "Ubuntu Cinnamon 26.04 - Resolute Raccoon",
+              "xubuntu":          "Xubuntu 26.04 - Resolute Raccoon",
           }
 
           entries = []
           for flavor, name in NAMES.items():
               parts = sorted(glob.glob(
-                  f"artifacts/{flavor}-rootfs/{flavor}-24.04-t2-rootfs.img.xz.part*"
+                  f"artifacts/{flavor}-rootfs/{flavor}-26.04-t2-rootfs.img.xz.part*"
               ))
               if not parts:
                   continue
-              sha_file = f"artifacts/{flavor}-rootfs/{flavor}-24.04-t2-rootfs.img.xz.sha256"
+              sha_file = f"artifacts/{flavor}-rootfs/{flavor}-26.04-t2-rootfs.img.xz.sha256"
               entry = {"name": name, "iso": [f"{BASE}/{os.path.basename(p)}" for p in parts]}
               if os.path.exists(sha_file):
                   entry["sha256"] = open(sha_file).read().strip()

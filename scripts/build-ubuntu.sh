@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 FLAVOR="ubuntu"
-CODENAME="noble"
-UBUNTU_VERSION="24.04"
+CODENAME="resolute"
+UBUNTU_VERSION="26.04"
 DESKTOP_PKGS="ubuntu-desktop-minimal"
 DISK_SIZE="8G"
 
