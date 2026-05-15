@@ -85,7 +85,7 @@ build_rootfs() {
 
   echo "==> [${FLAVOR}] Splitting into ≤2G parts..."
   split \
-    --bytes=2G \
+    --bytes=1990M \
     --numeric-suffixes=1 \
     --suffix-length=2 \
     disk.img.xz \
