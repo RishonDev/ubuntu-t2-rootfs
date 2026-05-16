@@ -12,38 +12,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  create-release:
-    name: Create release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set release tag
-        id: tag
-        run: |
-          TAG="${{ github.event.inputs.release_tag }}"
-          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.tag.outputs.tag }}
-        run: |
-          gh release view "$TAG" &>/dev/null && \
-            echo "Release $TAG already exists — will upload to it" || \
-            gh release create "$TAG" \
-              --title "T2 Ubuntu Rootfs ${TAG}" \
-              --notes "Automated build from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
   build:
     name: ${{ matrix.flavor }}
-    needs: create-release
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -83,14 +53,19 @@ jobs:
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
+          gh release view "$TAG" &>/dev/null || \
+            gh release create "$TAG" \
+              --title "T2 Ubuntu Rootfs ${TAG}" \
+              --notes "Automated build from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" || true
           find build/${{ matrix.flavor }}/ -type f | sort | \
             xargs gh release upload "$TAG" --clobber
 
   update-metadata:
     name: Update metadata.json
-    needs: [create-release, build]
+    needs: build
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -102,14 +77,14 @@ jobs:
       - name: Download sha256 files from release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
           mkdir -p artifacts
           gh release download "$TAG" --pattern "*.sha256" --dir artifacts/ || true
 
       - name: Generate metadata.json
-        env:
-          TAG: ${{ needs.create-release.outputs.tag }}
         run: |
           python3 << 'EOF'
           import json, os
@@ -152,5 +127,4 @@ jobs:
       - name: Upload metadata.json
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ needs.create-release.outputs.tag }}
         run: gh release upload "$TAG" metadata.json --clobber
