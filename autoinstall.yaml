@@ -67,14 +67,11 @@ autoinstall:
         apt-get update -qq
       '
 
-    # -- Desktop environment (installed before linux-t2 intentionally) --
-    # --no-install-recommends skips kubuntu/ubuntu-restricted-extras and
-    # the linux-restricted-modules dependency chain, which can be missing
+    # -- Desktop + T2 kernel/hardware packages --
+    # --no-install-recommends skips *-restricted-extras and the
+    # linux-restricted-modules dependency chain, which can be missing
     # or broken in a fresh 26.04 repo and causes exit 100.
     - curtin in-target --target=/target -- apt-get install -y --no-install-recommends %%DESKTOP_PKGS%%
-
-    # -- T2 kernel + hardware packages --
-    - curtin in-target --target=/target -- apt-get install -y %%T2_PKGS%%
     - curtin in-target --target=/target -- apt-get clean
 
     # -- apple-bce module (keyboard/touchpad/audio bridge) --

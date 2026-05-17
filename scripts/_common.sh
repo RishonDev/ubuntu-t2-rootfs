@@ -45,13 +45,10 @@ err()  { printf "%sERROR%s %s\n" "$(red)" "$(reset)" "$*" >&2; exit 1; }
 _read_pkgs() { grep -v '^\s*#' "$1" | grep -v '^\s*$' | tr '\n' ' ' | xargs; }
 
 desktop_pkg_file="${repo_root}/packages/${FLAVOR}.packages"
-t2_pkg_file="${repo_root}/packages/t2.packages"
 
 [[ -f "${desktop_pkg_file}" ]] || err "no package list at ${desktop_pkg_file}"
-[[ -f "${t2_pkg_file}" ]]      || err "no package list at ${t2_pkg_file}"
 
 desktop_pkgs=$(_read_pkgs "${desktop_pkg_file}")
-t2_pkgs=$(_read_pkgs "${t2_pkg_file}")
 
 ##
 ## ISO resolution
@@ -94,7 +91,6 @@ build_rootfs() {
   sed \
     -e "s|%%CODENAME%%|${CODENAME}|g" \
     -e "s|%%DESKTOP_PKGS%%|${desktop_pkgs}|g" \
-    -e "s|%%T2_PKGS%%|${t2_pkgs}|g" \
     "${repo_root}/autoinstall.yaml" > "${seed_dir}/user-data"
   printf 'instance-id: ubuntu-t2-build\nlocal-hostname: t2-ubuntu\n' > "${seed_dir}/meta-data"
   xorriso -as mkisofs -volid CIDATA -joliet -rock -output seed.iso "${seed_dir}" 2>/dev/null
