@@ -2,7 +2,6 @@
 FLAVOR="xubuntu"
 CODENAME="resolute"
 UBUNTU_VERSION="26.04"
-DESKTOP_PKGS="xubuntu-desktop"
 DISK_SIZE="8G"
 
 source "$(dirname "$0")/_common.sh"

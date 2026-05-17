@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Source this from a flavor script after setting FLAVOR, CODENAME,
-# UBUNTU_VERSION, and DESKTOP_PKGS, then call build_rootfs.
+# UBUNTU_VERSION, and DISK_SIZE, then call build_rootfs.
+# Packages are read from packages/<FLAVOR>.packages.
 
 set -euo pipefail
 
@@ -10,8 +11,12 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 : "${FLAVOR:?'FLAVOR must be set'}"
 : "${CODENAME:=resolute}"
 : "${UBUNTU_VERSION:=26.04}"
-: "${DESKTOP_PKGS:?'DESKTOP_PKGS must be set'}"
 : "${DISK_SIZE:=20G}"
+
+PACKAGES_FILE="${REPO_ROOT}/packages/${FLAVOR}.packages"
+[[ -f "${PACKAGES_FILE}" ]] \
+  || { echo "ERROR: no package list at ${PACKAGES_FILE}" >&2; exit 1; }
+DESKTOP_PKGS=$(grep -v '^\s*#' "${PACKAGES_FILE}" | grep -v '^\s*$' | tr '\n' ' ' | xargs)
 
 # Resolve the ISO filename — handles both initial release (26.04) and point
 # releases (26.04.1, 26.04.2, …). The || true prevents pipefail from aborting
