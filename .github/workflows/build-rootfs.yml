@@ -54,8 +54,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          source release.conf
           TAG="${{ github.event.inputs.release_tag }}"
-          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
+          [ -z "$TAG" ] && TAG="v${UBUNTU_VERSION}-$(date +%Y.%m.%d)"
           gh release view "$TAG" &>/dev/null || \
             gh release create "$TAG" \
               --title "T2 Ubuntu Rootfs ${TAG}" \
@@ -78,9 +79,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          source release.conf
           TAG="${{ github.event.inputs.release_tag }}"
-          [ -z "$TAG" ] && TAG="v26.04-$(date +%Y.%m.%d)"
-          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          [ -z "$TAG" ] && TAG="v${UBUNTU_VERSION}-$(date +%Y.%m.%d)"
+          echo "TAG=${TAG}"                   >> "$GITHUB_ENV"
+          echo "UBUNTU_VERSION=${UBUNTU_VERSION}" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=${RELEASE_NAME}" >> "$GITHUB_ENV"
           mkdir -p artifacts
           gh release download "$TAG" --pattern "*.sha256" --dir artifacts/ || true
 
@@ -89,23 +93,25 @@ jobs:
           python3 << 'EOF'
           import json, os
 
-          REPO  = os.environ["GITHUB_REPOSITORY"]
-          TAG   = os.environ["TAG"]
-          BASE  = f"https://github.com/{REPO}/releases/download/{TAG}"
+          REPO    = os.environ["GITHUB_REPOSITORY"]
+          TAG     = os.environ["TAG"]
+          VER     = os.environ["UBUNTU_VERSION"]
+          RELEASE = os.environ["RELEASE_NAME"]
+          BASE    = f"https://github.com/{REPO}/releases/download/{TAG}"
 
-          NAMES = {
-              "ubuntu":          "Ubuntu 26.04 - Resolute Raccoon",
-              "kubuntu":         "Kubuntu 26.04 - Resolute Raccoon",
-              "ubuntu-unity":    "Ubuntu Unity 26.04 - Resolute Raccoon",
-              "ubuntu-budgie":   "Ubuntu Budgie 26.04 - Resolute Raccoon",
-              "ubuntu-cinnamon": "Ubuntu Cinnamon 26.04 - Resolute Raccoon",
-              "xubuntu":         "Xubuntu 26.04 - Resolute Raccoon",
+          FLAVORS = {
+              "ubuntu":          f"Ubuntu {VER} - {RELEASE}",
+              "kubuntu":         f"Kubuntu {VER} - {RELEASE}",
+              "ubuntu-unity":    f"Ubuntu Unity {VER} - {RELEASE}",
+              "ubuntu-budgie":   f"Ubuntu Budgie {VER} - {RELEASE}",
+              "ubuntu-cinnamon": f"Ubuntu Cinnamon {VER} - {RELEASE}",
+              "xubuntu":         f"Xubuntu {VER} - {RELEASE}",
           }
 
           entries = []
-          for flavor, name in NAMES.items():
-              parts_sha = f"artifacts/{flavor}-26.04-t2-rootfs.sha256"
-              xz_sha    = f"artifacts/{flavor}-26.04-t2-rootfs.img.xz.sha256"
+          for flavor, name in FLAVORS.items():
+              parts_sha = f"artifacts/{flavor}-{VER}-t2-rootfs.sha256"
+              xz_sha    = f"artifacts/{flavor}-{VER}-t2-rootfs.img.xz.sha256"
               if not os.path.exists(parts_sha):
                   continue
               parts = [

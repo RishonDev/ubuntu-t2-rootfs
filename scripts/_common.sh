@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Source this from a flavor script after setting FLAVOR, CODENAME,
-# UBUNTU_VERSION, and DISK_SIZE, then call build_rootfs.
-# Packages are read from packages/<FLAVOR>.packages.
+# Source this from a flavor script after setting FLAVOR and DISK_SIZE,
+# then call build_rootfs.
+# Release info comes from release.conf; packages from packages/<FLAVOR>.packages
+# and packages/t2.packages.
 
 set -euo pipefail
 
@@ -9,14 +10,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 : "${FLAVOR:?'FLAVOR must be set'}"
-: "${CODENAME:=resolute}"
-: "${UBUNTU_VERSION:=26.04}"
 : "${DISK_SIZE:=20G}"
+
+# shellcheck source=../release.conf
+source "${REPO_ROOT}/release.conf"
+
+read_pkgs() { grep -v '^\s*#' "$1" | grep -v '^\s*$' | tr '\n' ' ' | xargs; }
 
 PACKAGES_FILE="${REPO_ROOT}/packages/${FLAVOR}.packages"
 [[ -f "${PACKAGES_FILE}" ]] \
   || { echo "ERROR: no package list at ${PACKAGES_FILE}" >&2; exit 1; }
-DESKTOP_PKGS=$(grep -v '^\s*#' "${PACKAGES_FILE}" | grep -v '^\s*$' | tr '\n' ' ' | xargs)
+DESKTOP_PKGS=$(read_pkgs "${PACKAGES_FILE}")
+
+T2_PACKAGES_FILE="${REPO_ROOT}/packages/t2.packages"
+[[ -f "${T2_PACKAGES_FILE}" ]] \
+  || { echo "ERROR: no package list at ${T2_PACKAGES_FILE}" >&2; exit 1; }
+T2_PKGS=$(read_pkgs "${T2_PACKAGES_FILE}")
 
 # Resolve the ISO filename — handles both initial release (26.04) and point
 # releases (26.04.1, 26.04.2, …). The || true prevents pipefail from aborting
@@ -51,6 +60,7 @@ build_rootfs() {
   sed \
     -e "s|%%CODENAME%%|${CODENAME}|g" \
     -e "s|%%DESKTOP_PKGS%%|${DESKTOP_PKGS}|g" \
+    -e "s|%%T2_PKGS%%|${T2_PKGS}|g" \
     "${REPO_ROOT}/autoinstall.yaml" > "${tmpdir}/user-data"
   printf 'instance-id: ubuntu-t2-build\nlocal-hostname: t2-ubuntu\n' > "${tmpdir}/meta-data"
   xorriso -as mkisofs -volid CIDATA -joliet -rock \
