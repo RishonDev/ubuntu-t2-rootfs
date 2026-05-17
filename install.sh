@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MIT
+# Adapted from the Asahi Linux installer (https://asahilinux.org/)
 
 set -e
 
@@ -18,18 +19,22 @@ if [ ! -f main.py ]; then
     echo "  Fetching installer..."
     curl --no-progress-meter -L -o main.py \
         "https://raw.githubusercontent.com/${REPO}/main/main.py"
+    curl --no-progress-meter -L -o util.py \
+        "https://raw.githubusercontent.com/${REPO}/main/util.py"
 fi
 
+set +e
 macos_ver=$(/usr/libexec/PlistBuddy -c "Print :ProductVersion" \
-    /System/Library/CoreServices/SystemVersion.plist 2>/dev/null) || true
+    /System/Library/CoreServices/SystemVersion.plist 2>/dev/null)
+res=$?
+set -e
 
-if [ -z "$macos_ver" ]; then
+if [ "$res" -ne 0 ] || [ -z "$macos_ver" ]; then
     echo "Unable to determine macOS version. Please report a bug."
     exit 1
 fi
 
-major="${macos_ver%%.*}"
-if [ "$major" -lt 13 ]; then
+if [ "${macos_ver%%.*}" -lt 13 ]; then
     echo "T2 Ubuntu requires macOS 13.5 or later (found ${macos_ver})."
     exit 1
 fi
